@@ -56,6 +56,12 @@ class LineChart: UIView {
         }
     }
     
+    var dataEntries2: [PointEntry]? {
+        didSet {
+            self.setNeedsLayout()
+        }
+    }
+    
     /// Contains the main line which represents the data
     private let dataLayer: CALayer = CALayer()
     
@@ -93,21 +99,31 @@ class LineChart: UIView {
         mainLayer.addSublayer(dataLayer)
         scrollView.layer.addSublayer(mainLayer)
         
-        gradientLayer.colors = [#colorLiteral(red: 1, green: 1, blue: 1, alpha: 0.7).cgColor, UIColor.clear.cgColor]
+        gradientLayer.colors = [UIColor.cyan.cgColor, UIColor.clear.cgColor]
         scrollView.layer.addSublayer(gradientLayer)
         self.layer.addSublayer(gridLayer)
         self.addSubview(scrollView)
-        self.backgroundColor = #colorLiteral(red: 0, green: 0.3529411765, blue: 0.6156862745, alpha: 1)
+        self.backgroundColor = .white
     }
     
     override func layoutSubviews() {
         scrollView.frame = CGRect(x: 0, y: 0, width: self.frame.size.width, height: self.frame.size.height)
-        if let dataEntries = dataEntries {
+        if let dataEntries = dataEntries, let dataEntries2 = dataEntries2 {
+//            print("dataEntries:\(dataEntries)")
+            
             scrollView.contentSize = CGSize(width: CGFloat(dataEntries.count) * lineGap, height: self.frame.size.height)
+//            scrollView.backgroundColor = UIColor.red
             mainLayer.frame = CGRect(x: 0, y: 0, width: CGFloat(dataEntries.count) * lineGap, height: self.frame.size.height)
+//            mainLayer.backgroundColor = UIColor.red.cgColor
+//            print("dataLayer y:\(topSpace)")
+//            print("dataLayer bottom space:\(bottomSpace)")
+//            print("dataLayer width:\(mainLayer.frame.width)")
+//            print("dataLayer height:\(mainLayer.frame.height - topSpace - bottomSpace)")
             dataLayer.frame = CGRect(x: 0, y: topSpace, width: mainLayer.frame.width, height: mainLayer.frame.height - topSpace - bottomSpace)
+//            dataLayer.backgroundColor = UIColor.red.cgColor
             gradientLayer.frame = dataLayer.frame
-            dataPoints = convertDataEntriesToPoints(entries: dataEntries)
+            dataPoints = convertDataEntriesToPoints(entries: dataEntries, entries2: dataEntries2)
+//            print("dataPoints:\(dataPoints)")
             gridLayer.frame = CGRect(x: 0, y: topSpace, width: self.frame.width, height: mainLayer.frame.height - topSpace - bottomSpace)
             if showDots { drawDots() }
             clean()
@@ -120,14 +136,15 @@ class LineChart: UIView {
             maskGradientLayer()
             drawLables()
         }
+        
     }
     
     /**
      Convert an array of PointEntry to an array of CGPoint on dataLayer coordinate system
      */
-    private func convertDataEntriesToPoints(entries: [PointEntry]) -> [CGPoint] {
+    private func convertDataEntriesToPoints(entries: [PointEntry], entries2: [PointEntry]) -> [CGPoint] {
         if let max = entries.max()?.value,
-            let min = entries.min()?.value {
+            let min = entries2.min()?.value {
             
             var result: [CGPoint] = []
             let minMaxRange: CGFloat = CGFloat(max - min) * topHorizontalLine
@@ -135,6 +152,12 @@ class LineChart: UIView {
             for i in 0..<entries.count {
                 let height = dataLayer.frame.height * (1 - ((CGFloat(entries[i].value) - CGFloat(min)) / minMaxRange))
                 let point = CGPoint(x: CGFloat(i)*lineGap + 40, y: height)
+                result.append(point)
+            }
+            
+            for index in stride(from: entries2.count - 1, through: 0, by: -1) {
+                let height = dataLayer.frame.height * (1 - ((CGFloat(entries2[index].value) - CGFloat(min)) / minMaxRange))
+                let point = CGPoint(x: CGFloat(index)*lineGap + 40, y: height)
                 result.append(point)
             }
             return result
@@ -152,7 +175,8 @@ class LineChart: UIView {
             
             let lineLayer = CAShapeLayer()
             lineLayer.path = path.cgPath
-            lineLayer.strokeColor = UIColor.white.cgColor
+//            lineLayer.lineWidth = 1
+            lineLayer.strokeColor = UIColor.clear.cgColor
             lineLayer.fillColor = UIColor.clear.cgColor
             dataLayer.addSublayer(lineLayer)
         }
@@ -184,7 +208,8 @@ class LineChart: UIView {
         if let path = CurveAlgorithm.shared.createCurvedPath(dataPoints) {
             let lineLayer = CAShapeLayer()
             lineLayer.path = path.cgPath
-            lineLayer.strokeColor = UIColor.white.cgColor
+//            lineLayer.fillColor = UIColor.red.cgColor
+            lineLayer.strokeColor = UIColor.clear.cgColor
             lineLayer.fillColor = UIColor.clear.cgColor
             dataLayer.addSublayer(lineLayer)
         }
@@ -248,6 +273,10 @@ class LineChart: UIView {
             return
         }
         
+        guard let dataEntries2 = dataEntries2 else {
+            return
+        }
+        
         var gridValues: [CGFloat]? = nil
         if dataEntries.count < 4 && dataEntries.count > 0 {
             gridValues = [0, 1]
@@ -276,9 +305,13 @@ class LineChart: UIView {
                 var minMaxGap:CGFloat = 0
                 var lineValue:Int = 0
                 if let max = dataEntries.max()?.value,
-                    let min = dataEntries.min()?.value {
-                    minMaxGap = CGFloat(max - min) * topHorizontalLine
-                    lineValue = Int((1-value) * minMaxGap) + Int(min)
+                    let min = dataEntries2.min()?.value {
+                    if max - min > 0 {
+                        minMaxGap = CGFloat(max - min) * topHorizontalLine
+                        lineValue = Int((1-value) * minMaxGap) + Int(min)
+                    } else {
+                        lineValue = Int((1-value) * 4 * 100)
+                    }
                 }
                 
                 let textLayer = CATextLayer()
